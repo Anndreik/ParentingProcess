@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
                 exit(EXIT_FAILURE);
             /* Child does some work, and lets parent know it's done */
             srand(time(NULL) - j*2);
-            sleep(3);
+            //sleep(3);
             int t;
             do{
                 t = (rand() % (MAX_VALUE+1-MIN_VALUE)) + MIN_VALUE;
