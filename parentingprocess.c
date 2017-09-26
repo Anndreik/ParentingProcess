@@ -4,9 +4,12 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 #define MAX_VALUE 1000
 #define MIN_VALUE 2
+#define BUF_SIZE 100
 
 
 /*
@@ -39,7 +42,13 @@ int isPrime(int n){
 int main(int argc, char *argv[])
 {
     int pfd[2];                             /* Process synchronization pipe */
-    int j, dummy;
+    int j;
+   
+    char buf[BUF_SIZE];                     //buffer to use for reading;
+    char buf_write[BUF_SIZE];               //buffer to use for writing;   
+    ssize_t numRead;                        //how much to read
+    int status = 0;
+    pid_t wpid;
 
     if (argc < 2 || strcmp(argv[1], "--help") == 0)
         printf("Usage: %s <number_of_childs>", argv[0]);
@@ -47,8 +56,10 @@ int main(int argc, char *argv[])
                                                terminate child with _exit() */
     printf("Parent started\n");
 
-    if (pipe(pfd) == -1)
+    if (pipe(pfd) == -1){
+        printf("Creating pipe failed!\n");
         exit(EXIT_FAILURE);
+    }
     int num;
     num = strtol(argv[1], NULL, 10);
     for (j = 1; j <= num; j++) {
@@ -57,23 +68,36 @@ int main(int argc, char *argv[])
         case -1:
             exit(EXIT_FAILURE);
         case 0: /* Child */
-            if (close(pfd[0]) == -1)        /* Read end is unused */
+            if (close(pfd[0]) == -1){        /* Read end is unused */
+                printf("Child closing read end failed!\n");
                 exit(EXIT_FAILURE);
-            /* Child does some work, and lets parent know it's done */
+            }
+            
             srand(time(NULL) - j*2);
             //sleep(3);
             int t;
             do{
                 t = (rand() % (MAX_VALUE+1-MIN_VALUE)) + MIN_VALUE;
             }while(!isPrime(t));
-            
-            printf("Child %d (PID=%ld) generated the prime number: %d\n", j, (long) getpid(), t);                             
-            printf("Child %d (PID=%ld) closing pipe\n",
-                     j, (long) getpid());
+            //print the value
+            printf("Child %d (PID=%ld) generated the prime number: %d\n", j, (long) getpid(), t); 
+            //now write it on the pipe
+            snprintf(buf_write, BUF_SIZE, "%ld - %d", (long) getpid(), t);
+            printf ("This is buf_write: %s\n", buf_write);
+            if (write(pfd[1], buf_write, (strlen(buf_write)+1))){
+                //printf("Child writing on the pipe failed!\n");
+                //printf("Error code is %d\n", errno);
+                //printf("%s\n", strerror(errno));
+                //exit(EXIT_FAILURE);
+            }
+
+
+            /*printf("Child %d (PID=%ld) closing pipe\n",
+                     j, (long) getpid());*/
 
             if (close(pfd[1]) == -1)
                 exit(EXIT_FAILURE);
-            /* Child now carries on to do other things... */
+
             _exit(EXIT_SUCCESS);
         default: /* Parent loops to create next child */
             break;
@@ -81,13 +105,30 @@ int main(int argc, char *argv[])
     }
     /* Parent comes here; close write end of pipe so we can see EOF */
 
-    if (close(pfd[1]) == -1)                /* Write end is unused */
+    if (close(pfd[1]) == -1){               /* Write end is unused */
+        
+        printf("Parent closing write end failed!\n");
         exit(EXIT_FAILURE);
-    /* Parent may do other work, then synchronizes with children */
+    }                
+        
+    
 
-    if (read(pfd[0], &dummy, 1) != 0)
-        exit(EXIT_FAILURE);
+    for (;;) {              /* Read data from pipe, echo on stdout */
+        numRead = read(pfd[0], buf, BUF_SIZE);
+        if (numRead == -1)
+            exit(EXIT_FAILURE);
+        if (numRead == 0)
+            break;                      /* End-of-file */
+        printf("Parent process writing...\n");
+        if (write(STDOUT_FILENO, buf, numRead) != numRead){
+            printf("Error writing to STDOUT_FILENO");
+            exit(EXIT_FAILURE);
+        }
+        printf("\nParent process end writing...\n");  
+    }
+    
+    while ((wpid = wait(&status)) > 0);    
     printf("Parent ready to go\n");
-    /* Parent can now carry on to do other things... */
+    
     exit(EXIT_SUCCESS);
 }
