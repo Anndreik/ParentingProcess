@@ -74,16 +74,16 @@ int main(int argc, char *argv[])
             }
             
             srand(time(NULL) - j*2);
-            //sleep(3);
+            sleep(1);
             int t;
             do{
                 t = (rand() % (MAX_VALUE+1-MIN_VALUE)) + MIN_VALUE;
             }while(!isPrime(t));
             //print the value
-            printf("Child %d (PID=%ld) generated the prime number: %d\n", j, (long) getpid(), t); 
+            //printf("Child %d (PID=%ld) generated the prime number: %d\n", j, (long) getpid(), t); 
             //now write it on the pipe
-            snprintf(buf_write, BUF_SIZE, "%ld - %d", (long) getpid(), t);
-            printf ("This is buf_write: %s\n", buf_write);
+            snprintf(buf_write, BUF_SIZE, "Child process %ld send the prime number: %d\n", (long) getpid(), t);
+            //printf ("This is buf_write: %s\n", buf_write);
             if (write(pfd[1], buf_write, (strlen(buf_write)+1))){
                 //printf("Child writing on the pipe failed!\n");
                 //printf("Error code is %d\n", errno);
@@ -119,16 +119,16 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         if (numRead == 0)
             break;                      /* End-of-file */
-        printf("Parent process writing...\n");
+        //printf("Parent process writing...\n");
         if (write(STDOUT_FILENO, buf, numRead) != numRead){
             printf("Error writing to STDOUT_FILENO");
             exit(EXIT_FAILURE);
         }
-        printf("\nParent process end writing...\n");  
+        //printf("\nParent process end writing...\n");  
     }
     
     while ((wpid = wait(&status)) > 0);    
-    printf("Parent ready to go\n");
+    //printf("Parent ready to go\n");
     
     exit(EXIT_SUCCESS);
 }
