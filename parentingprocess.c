@@ -41,7 +41,7 @@ int isPrime(int n){
 
 int main(int argc, char *argv[])
 {
-    int pfd[2];                             /* Process synchronization pipe */
+    
     int j;
    
     char buf[BUF_SIZE];                     //buffer to use for reading;
@@ -50,53 +50,74 @@ int main(int argc, char *argv[])
     int status = 0;
     pid_t wpid;
 
-    if (argc < 2 || strcmp(argv[1], "--help") == 0)
-        printf("Usage: %s <number_of_childs>", argv[0]);
+    if (argc < 2 || strcmp(argv[1], "--help") == 0){
+        printf("Usage: %s <number_of_childs>\n", argv[0]);
+        exit(EXIT_SUCCESS);
+    }
+
+    int num;
+    num = strtol(argv[1], NULL, 10);
+    int pfd[num][2];                             /* Process synchronization pipe */
     setbuf(stdout, NULL);                   /* Make stdout unbuffered, since we
                                                terminate child with _exit() */
     printf("Parent started\n");
-
-    if (pipe(pfd) == -1){
-        printf("Creating pipe failed!\n");
-        exit(EXIT_FAILURE);
+    int x;
+    for(x = 0; x < num; ++x){
+        if (pipe(pfd[x]) == -1){
+            printf("Creating pipe %d failed!\n", x);
+            exit(EXIT_FAILURE);
+        }
     }
-    int num;
-    num = strtol(argv[1], NULL, 10);
+    
+    
     for (j = 1; j <= num; j++) {
 
         switch (fork()) {
         case -1:
+            printf("error no= %d, ERROR = %s \n",errno,strerror(errno));
             exit(EXIT_FAILURE);
         case 0: /* Child */
-            if (close(pfd[0]) == -1){        /* Read end is unused */
-                printf("Child closing read end failed!\n");
+            if (close(pfd[j-1][0]) == -1){        /* Read end is unused */
+                printf("Child closing read end of pipe %d failed!\n", j-1);
                 exit(EXIT_FAILURE);
             }
             
             srand(time(NULL) - j*2);
-            sleep(1);
+            
             int t;
             do{
                 t = (rand() % (MAX_VALUE+1-MIN_VALUE)) + MIN_VALUE;
             }while(!isPrime(t));
-            //print the value
-            //printf("Child %d (PID=%ld) generated the prime number: %d\n", j, (long) getpid(), t); 
-            //now write it on the pipe
+             
+            //now write the value on the pipe
             snprintf(buf_write, BUF_SIZE, "Child process %ld send the prime number: %d\n", (long) getpid(), t);
             //printf ("This is buf_write: %s\n", buf_write);
-            if (write(pfd[1], buf_write, (strlen(buf_write)+1))){
-                //printf("Child writing on the pipe failed!\n");
-                //printf("Error code is %d\n", errno);
-                //printf("%s\n", strerror(errno));
-                //exit(EXIT_FAILURE);
-            }
+            
+            //if (write(pfd[j-1][1], buf_write, (strlen(buf_write)+1))){
+            //}
+            int bsent = 0;
+            int temp = 0;
+			while(bsent < strlen(buf_write))
+			{
+                temp = write(pfd[j-1][1], buf_write+bsent, 5);
+                if(temp == -1){
+                    printf("Child write on pipe %d failed", j-1);
+                    exit(EXIT_FAILURE);
+                }
+                else if(temp == 0){
+                    break;
+                }
+                else if(temp > 0 && temp <= 5)
+				    bsent += temp;
+				sleep(1);
+			}
 
 
-            /*printf("Child %d (PID=%ld) closing pipe\n",
-                     j, (long) getpid());*/
-
-            if (close(pfd[1]) == -1)
+            if (close(pfd[j-1][1]) == -1){
+                printf("Child closing write end of pipe %d failed!\n", j-1);
                 exit(EXIT_FAILURE);
+            }
+                
 
             _exit(EXIT_SUCCESS);
         default: /* Parent loops to create next child */
@@ -104,31 +125,40 @@ int main(int argc, char *argv[])
         }
     }
     /* Parent comes here; close write end of pipe so we can see EOF */
-
-    if (close(pfd[1]) == -1){               /* Write end is unused */
-        
-        printf("Parent closing write end failed!\n");
-        exit(EXIT_FAILURE);
-    }                
-        
-    
-
-    for (;;) {              /* Read data from pipe, echo on stdout */
-        numRead = read(pfd[0], buf, BUF_SIZE);
-        if (numRead == -1)
-            exit(EXIT_FAILURE);
-        if (numRead == 0)
-            break;                      /* End-of-file */
-        //printf("Parent process writing...\n");
-        if (write(STDOUT_FILENO, buf, numRead) != numRead){
-            printf("Error writing to STDOUT_FILENO");
+    int y;
+    for(y = 0; y < num; ++y){
+        if (close(pfd[y][1]) == -1){               /* Write end is unused */
+            printf("Parent closing write end of pipe %d failed!\n", y);
             exit(EXIT_FAILURE);
         }
-        //printf("\nParent process end writing...\n");  
     }
+                    
+        
+    
+
+                  /* Read data from pipe, echo on stdout */
+        int z;
+        int w;
+        for(z = 0; z < num; ++z){
+            for (;;) {
+                numRead = read(pfd[z][0], buf, BUF_SIZE);
+                if (numRead == -1)
+                    exit(EXIT_FAILURE);
+                if (numRead == 0)
+                    break;                      /* End-of-file */
+                w = write(STDOUT_FILENO, buf, numRead);
+                if (w == -1){
+                    printf("Error writing to STDOUT_FILENO");
+                    exit(EXIT_FAILURE);
+                }
+                else if(w == 0){
+                    printf("Parent has nothing to write on pipe %d\n", z);
+                }
+                
+            }
+        }
     
     while ((wpid = wait(&status)) > 0);    
-    //printf("Parent ready to go\n");
     
     exit(EXIT_SUCCESS);
 }
