@@ -91,7 +91,6 @@ int main(int argc, char *argv[])
              
             //now write the value on the pipe
             snprintf(buf_write, BUF_SIZE, "Child process %ld send the prime number: %d\n", (long) getpid(), t);
-            //printf ("This is buf_write: %s\n", buf_write);
             
             //if (write(pfd[j-1][1], buf_write, (strlen(buf_write)+1))){
             //}
@@ -158,7 +157,21 @@ int main(int argc, char *argv[])
             }
         }
     
-    while ((wpid = wait(&status)) > 0);    
+    //while ((wpid = wait(&status)) > 0);    
+    for(;;){
+        wpid = wait(NULL);
+        if(wpid == -1){
+            if(errno == ECHILD){
+                printf("No more children to wait for!\n");
+                exit(EXIT_SUCCESS);
+            }
+            else{
+                printf("error no= %d, ERROR = %s \n",errno,strerror(errno)); 
+                exit(EXIT_FAILURE);
+            }
+        }
+        printf("wait returned child PID %ld\n", (long)wpid);
+    }
     
     exit(EXIT_SUCCESS);
 }
